@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dashboard Fútbol</title>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<style>
+		* { box-sizing:border-box; margin:0; padding:0; }
+		body { font-family:'Inter',sans-serif; background:#0f0f15; color:#fff; padding-bottom:40px; }
+		.container { max-width:1200px; margin:0 auto; padding:0 20px; }
+		.header { border-bottom:1px solid rgba(255,255,255,.1); padding:30px 0 20px; margin-bottom:30px; text-align:center; }
+		.title { font-size:32px; font-weight:700; }
+		.subtitle { font-size:14px; color:#888; margin-top:6px; }
+		.loading { text-align:center; padding:60px; color:#888; }
+		.error { background:#ff4444; padding:20px; border-radius:8px; margin:20px; text-align:center; }
+		.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-bottom:30px; }
+		.stat-card { background:#1a1a25; border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:20px 16px; }
+		.stat-title { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; }
+		.stat-value { font-size:28px; font-weight:700; color:#00cc44; margin-bottom:4px; }
+		.stat-label { font-size:13px; color:#666; }
+		.gold .stat-value { color:#ffcc00; }
+		.tables-section { margin-top:40px; }
+		.section-title { font-size:18px; font-weight:600; margin-bottom:12px; }
+		.table-container { background:#1a1a25; border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden; margin-bottom:24px; }
+		table { width:100%; border-collapse:collapse; }
+		thead { background:#131318; }
+		thead th { padding:12px; text-align:left; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#888; }
+		tbody tr { border-bottom:1px solid rgba(255,255,255,.05); }
+		tbody tr:hover { background:rgba(255,255,255,.03); }
+		tbody td { padding:12px; font-size:14px; color:#ddd; }
+		.position { font-weight:600; font-size:14px; color:#ffcc00; }
+		.team-name { font-weight:500; }
+		.stat { text-align:center; }
+		.highlight-pos { background:rgba(255,204,0,.05)!important; }
+		@media (max-width:768px) { .title{font-size:28px} .stats-grid{grid-template-columns:1fr} table{font-size:13px} thead th,tbody td{padding:10px 8px} }
+	</style>
+</head>
+<body>
+	<header class="header">
+		<div class="container">
+			<h1 class="title">Dashboard Fútbol</h1>
+			<p class="subtitle">Estadísticas Liga Venezolana</p>
+		</div>
+	</header>
+	<div class="container">
+		<div id="loading" class="loading">Cargando...</div>
+		<div id="error" style="display:none"></div>
+		<div id="dashboard" style="display:none">
+			<div class="stats-grid">
+				<div class="stat-card"><div class="stat-title">Total Partidos</div><div class="stat-value" id="total-matches">0</div><div class="stat-label">En competencia</div></div>
+				<div class="stat-card"><div class="stat-title">Total Goles</div><div class="stat-value" id="total-goals">0</div><div class="stat-label">Anotados</div></div>
+				<div class="stat-card gold"><div class="stat-title">Partido Más Goles</div><div class="stat-value" id="max-goals">0</div><div class="stat-label" id="max-goals-match">-</div></div>
+				<div class="stat-card"><div class="stat-title">Promedio Goles</div><div class="stat-value" id="avg-goals">0</div><div class="stat-label">Por partido</div></div>
+			</div>
+			<div class="tables-section">
+				<h2 class="section-title">Equipos Más Goleadores</h2>
+				<div class="table-container"><table id="top-scorers"><thead><tr><th>Rank</th><th>Equipo</th><th>Goles</th></tr></thead><tbody></tbody></table></div>
+				<h2 class="section-title">Equipos Más Goleados</h2>
+				<div class="table-container"><table id="most-conceded"><thead><tr><th>Rank</th><th>Equipo</th><th>Goles</th></tr></thead><tbody></tbody></table></div>
+				<h2 class="section-title">Partidos por Equipo</h2>
+				<div class="table-container"><table id="matches-played"><thead><tr><th>Rank</th><th>Equipo</th><th>Partidos</th></tr></thead><tbody></tbody></table></div>
+				<h2 class="section-title">Tabla de Posiciones</h2>
+				<div class="table-container"><table id="standings"><thead><tr><th>Pos</th><th>Equipo</th><th>PJ</th><th>GF</th><th>GC</th><th>DG</th></tr></thead><tbody></tbody></table></div>
+			</div>
+		</div>
+	</div>
+	<script>
+		const API_URL='https://ehcntvheulvkxejilqnc.supabase.co/rest/v1/practica_Topicos?select=*';
+		const API_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVoY250dmhldWx2a3hlamlscW5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MzQ0OTksImV4cCI6MjA3NzAxMDQ5OX0.4laS3uxbk1ReFDYKiqoIQjPLUdPPGyGufJ8nQUY7fnA';
+		function parseScore(s){if(!s)return{h:0,a:0};const p=s.split('-');return{h:parseInt(p[0])||0,a:parseInt(p[1])||0};}
+		function calcStats(m){const t={};let g=0,mg=0,mms='';m.forEach(m=>{const{h,a}=parseScore(m.resultado);g+=h+a;if(h+a>mg){mg=h+a;mms=m.equipo_1+' '+m.resultado+' '+m.equipo_2}if(!t[m.equipo_1])t[m.equipo_1]={p:0,gf:0,gc:0};t[m.equipo_1].p++;t[m.equipo_1].gf+=h;t[m.equipo_1].gc+=a;if(!t[m.equipo_2])t[m.equipo_2]={p:0,gf:0,gc:0};t[m.equipo_2].p++;t[m.equipo_2].gf+=a;t[m.equipo_2].gc+=h;});return{t,g,mg,mms,tm:m.length};}
+		function rTopS(t){const s=Object.entries(t).map(([n,s])=>({n,g:s.gf})).sort((a,b)=>b.g-a.g).slice(0,10);document.querySelector('#top-scorers tbody').innerHTML=s.map((t,i)=>'<tr'+(i<3?' class="highlight-pos"':'')+'><td class="position">'+(i+1)+'</td><td class="team-name">'+escape(t.n)+'</td><td class="stat">'+t.g+'</td></tr>').join('');}
+		function rMostC(t){const s=Object.entries(t).map(([n,s])=>({n,g:s.gc})).sort((a,b)=>b.g-a.g).slice(0,10);document.querySelector('#most-conceded tbody').innerHTML=s.map((t,i)=>'<tr><td class="position">'+(i+1)+'</td><td class="team-name">'+escape(t.n)+'</td><td class="stat">'+t.g+'</td></tr>').join('');}
+		function rMatches(t){const s=Object.entries(t).map(([n,s])=>({n,p:s.p})).sort((a,b)=>b.p-a.p).slice(0,10);document.querySelector('#matches-played tbody').innerHTML=s.map((t,i)=>'<tr'+(i<3?' class="highlight-pos"':'')+'><td class="position">'+(i+1)+'</td><td class="team-name">'+escape(t.n)+'</td><td class="stat">'+t.p+'</td></tr>').join('');}
+		function rStand(t){const s=Object.entries(t).map(([n,s])=>({n,p:s.p,gf:s.gf,gc:s.gc,gd:s.gf-s.gc})).sort((a,b)=>b.gd-a.gd||b.gf-a.gf);document.querySelector('#standings tbody').innerHTML=s.map((t,i)=>'<tr'+(i<4?' class="highlight-pos"':'')+'><td class="position">'+(i+1)+'</td><td class="team-name">'+escape(t.n)+'</td><td class="stat">'+t.p+'</td><td class="stat">'+t.gf+'</td><td class="stat">'+t.gc+'</td><td class="stat">'+(t.gd>0?'+':'')+t.gd+'</td></tr>').join('');}
+		function escape(s){if(!s)return'';return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+		async function load(){try{const r=await fetch(API_URL,{headers:{'apikey':API_KEY,'Authorization':'Bearer '+API_KEY,'Range':'0-999'}});if(!r.ok)throw new Error('Error '+r.status);const m=await r.json();const s=calcStats(m);document.getElementById('total-matches').textContent=s.tm;document.getElementById('total-goals').textContent=s.g;document.getElementById('max-goals').textContent=s.mg;document.getElementById('max-goals-match').textContent=s.mms;document.getElementById('avg-goals').textContent=s.tm>0?(s.g/s.tm).toFixed(2):'0';rTopS(s.t);rMostC(s.t);rMatches(s.t);rStand(s.t);document.getElementById('loading').style.display='none';document.getElementById('dashboard').style.display='block';}catch(e){document.getElementById('loading').style.display='none';document.getElementById('error').style.display='block';document.getElementById('error').textContent='Error: '+e.message;}}
+		load();
+	</script>
+</body>
+</html>
